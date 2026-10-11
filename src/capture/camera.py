@@ -318,7 +318,8 @@ class Camera:
             self._released = True
 
     def _read_sync(self, deadline: float) -> Frame:
-        """Capture in the caller, serializing I/O without blocking latest().
+        """
+        Capture in the caller, serializing I/O without blocking latest().
         """
         remaining = deadline - time.perf_counter()
         if remaining <= 0 or not self._capture_lock.acquire(timeout=remaining):
