@@ -1,0 +1,49 @@
+DATASET QUALITY REPORT
+
+Rows read: 8960
+Rows kept: 8960
+Rows dropped:
+  bad_label      0
+  non_finite     0
+  bad_handedness 0
+  degenerate     0
+  out_of_frame   0
+  duplicate      0
+
+Counts per user x condition x label (* = below 60)
+user  condition            fist     v_sign  open_palm       none
+u01   bright_near           80         80         80         80 
+u01   bright_far            80         80         80         80 
+u01   dim_near              80         80         80         80 
+u01   dim_far               80         80         80         80 
+u02   bright_near           80         80         80         80 
+u02   bright_far            80         80         80         80 
+u02   dim_near              80         80         80         80 
+u02   dim_far               80         80         80         80 
+u03   bright_near           80         80         80         80 
+u03   bright_far            80         80         80         80 
+u03   dim_near              80         80         80         80 
+u03   dim_far               80         80         80         80 
+u04   bright_near           80         80         80         80 
+u04   bright_far            80         80         80         80 
+u04   dim_near              80         80         80         80 
+u04   dim_far               80         80         80         80 
+u05   bright_near           80         80         80         80 
+u05   bright_far            80         80         80         80 
+u05   dim_near              80         80         80         80 
+u05   dim_far               80         80         80         80 
+u06   bright_near           80         80         80         80 
+u06   bright_far            80         80         80         80 
+u06   dim_near              80         80         80         80 
+u06   dim_far               80         80         80         80 
+u07   bright_near           80         80         80         80 
+u07   bright_far            80         80         80         80 
+u07   dim_near              80         80         80         80 
+u07   dim_far               80         80         80         80 
+Cells below 60: 0
+
+Label balance (7 users): fist 2240  v_sign 2240  open_palm 2240  none 2240
+  train ['u01', 'u02', 'u03', 'u04']: fist 1280  v_sign 1280  open_palm 1280  none 1280
+  test ['u05', 'u06', 'u07']: fist 960  v_sign 960  open_palm 960  none 960
+
+Excluded files: 0
