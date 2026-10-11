@@ -23,6 +23,15 @@ from src.config import (
 )
 
 
+"""
+1:Create the tracker: __init__() prepares MediaPipe in video mode.
+2: Process each camera frame: detect() calls _validate_image() to check that input is a nonempty
+NumPy image with 3 colour channels and the expected pixel type, then extracts hand coordinates.
+3:Use the result: when a hand is found, the caller can pass it to draw() for the preview and preprocess() 
+for feature preparation. draw() also calls _validate_image().
+4:Finish: the caller calls close() to release resources.
+"""
+
 @dataclass(frozen=True)
 class HandLandmarks:
     """Store raw coordinates and handedness together for shared preprocessing.
@@ -80,19 +89,12 @@ class HandTracker:
         self._closed = False
 
     def detect(self, image_bgr: np.ndarray) -> HandLandmarks | None:
-        """Find the first hand without changing the supplied image.
-
-        Args:
-            image_bgr: Mirrored BGR uint8 array, shape (height, width, 3).
-
-        Returns:
-            Raw landmarks with handedness/score, or None if no hand is detected.
-
-        Raises:
-            ValueError: The image has the wrong dtype/shape or is empty.
-            RuntimeError: The tracker is closed or MediaPipe returns incomplete data.
         """
-        self._validate_image(image_bgr)
+        Validates the image, converts BGR colours to RGB, and runs MediaPipe. 
+        Returns the first detected hand as HandLandmarks, or None when no hand is found.
+        
+        """
+        self._validate_image(image_bgr) #Validate the image and return error if error
         if self._closed:
             raise RuntimeError("HandTracker is closed; create a new tracker.")
         # OpenCV stores BGR; MediaPipe expects RGB. Conversion creates a separate
@@ -104,7 +106,7 @@ class HandTracker:
             return None
         if not result.multi_handedness or not result.multi_handedness[0].classification:
             raise RuntimeError("MediaPipe returned landmarks without handedness.")
-        label = result.multi_handedness[0].classification[0]
+        label = result.multi_handedness[0].classification[0] #Labelling
         points = np.array(
             [(point.x, point.y, point.z) for point in result.multi_hand_landmarks[0].landmark],
             dtype=np.float32,
@@ -114,28 +116,22 @@ class HandTracker:
         return HandLandmarks(points=points, handedness=label.label, score=float(label.score))
 
     def draw(self, image_bgr: np.ndarray, hand: HandLandmarks) -> None:
-        """Draw landmark points and connections onto an image in place.
-
-        Args:
-            image_bgr: Writable BGR uint8 preview image, shape (height, width, 3).
-                Pass frame.image.copy() when the source Frame is shared.
-            hand: Raw normalized landmarks, not the preprocessed feature vector.
-
-        Raises:
-            ValueError: The image or coordinate shape/values are invalid.
         """
-        self._validate_image(image_bgr)
-        points = np.asarray(hand.points)
+        Checks the image and coordinates, then draws landmark points 
+        and connecting lines onto the supplied image.
+        """
+        self._validate_image(image_bgr) 
+        points = np.asarray(hand.points) #Draw the points on the hand
         if points.shape != (NUM_LANDMARKS, NUM_COORDS) or not np.isfinite(points).all():
             raise ValueError("Drawing requires 21 finite (x, y, z) landmark coordinates.")
         # MediaPipe's drawing utility accepts its protobuf container. Rebuilding
         # that container keeps the public interface independent of protobuf.
         proto = landmark_pb2.NormalizedLandmarkList(
-            landmark=[
+            landmark=[ 
                 landmark_pb2.NormalizedLandmark(x=float(x), y=float(y), z=float(z))
                 for x, y, z in points
             ]
-        )
+        ) #Draw the landmarks
         mp.solutions.drawing_utils.draw_landmarks(
             image_bgr, proto, mp.solutions.hands.HAND_CONNECTIONS
         )
@@ -148,7 +144,9 @@ class HandTracker:
 
     @staticmethod
     def _validate_image(image: np.ndarray) -> None:
-        """Reject inputs that cannot represent a nonempty BGR uint8 camera image."""
+        """
+        Checks that the input is a nonempty NumPy image with three colour channels and the expected pixel type.
+        """
         if (
             not isinstance(image, np.ndarray)
             or image.dtype != np.uint8
