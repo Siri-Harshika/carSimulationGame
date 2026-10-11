@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "created_utc": "2026-10-11T07:03:43Z",
+  "seed": 218,
+  "data_dir": "data/raw",
+  "test_users": [
+    "u05",
+    "u06",
+    "u07"
+  ],
+  "train_users": [
+    "u01",
+    "u02",
+    "u03",
+    "u04"
+  ],
+  "validation": "leave_one_user_out",
+  "files": {
+    "train": [
+      "u01_bright_far_20261011-004652.csv",
+      "u01_bright_near_20261011-004419.csv",
+      "u01_dim_far_20261011-005637.csv",
+      "u01_dim_near_20261011-004855.csv",
+      "u02_bright_far_20261011-122554.csv",
+      "u02_bright_near_20261011-122416.csv",
+      "u02_dim_far_20261011-122758.csv",
+      "u02_dim_near_20261011-122944.csv",
+      "u03_bright_far_20261011-132929.csv",
+      "u03_bright_near_20261011-132728.csv",
+      "u03_dim_far_20261011-133128.csv",
+      "u03_dim_near_20261011-133237.csv",
+      "u04_bright_far_20261011-135002.csv",
+      "u04_bright_near_20261011-134829.csv",
+      "u04_dim_far_20261011-135139.csv",
+      "u04_dim_near_20261011-135337.csv"
+    ],
+    "test": [
+      "u05_bright_far_20261011-151200.csv",
+      "u05_bright_near_20261011-150944.csv",
+      "u05_dim_far_20261011-151328.csv",
+      "u05_dim_near_20261011-151455.csv",
+      "u06_bright_far_20261011-174416.csv",
+      "u06_bright_near_20261011-174232.csv",
+      "u06_dim_far_20261011-175049.csv",
+      "u06_dim_near_20261011-174701.csv",
+      "u07_bright_far_20261011-161252.csv",
+      "u07_bright_near_20261011-161054.csv",
+      "u07_dim_far_20261011-161446.csv",
+      "u07_dim_near_20261011-161653.csv"
+    ]
+  },
+  "excluded_files": {}
+}
