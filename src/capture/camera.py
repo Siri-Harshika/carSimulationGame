@@ -27,6 +27,20 @@ from src.config import (
 )
 
 
+"""
+A thread lets the program carry out another task alongside its main processing loop.
+While the main program detects a hand in one image, the camera thread continues capturing newer images.
+1: __init__() starts _capture_loop(), which repeatedly calls _capture_frame() 
+followed by _publish_frame() to stores the newest fram updates timestamp history.
+Both threads access shared information, such as self._latest_frame. 
+A lock allows only one thread at a time to access the protected information.
+2: Other code calls read() or latest() to obtain the stored frame. 
+The fps property uses its timestamp history.
+3: close() stops background capture, and the worker calls _release_capture() to prevent repeated clenup. 
+A with block triggers this automatically through __exit__().
+4: With background capture disabled, read() uses _read_sync() to capture and publish a frame directly.
+"""
+
 @dataclass(frozen=True)
 class Frame:
     """Bundle one image with its capture time and sequence number.
@@ -60,7 +74,7 @@ class Camera:
         width: int = FRAME_WIDTH,
         height: int = FRAME_HEIGHT,
         mirror: bool = MIRROR_FRAME,
-        threaded: bool = CAMERA_THREADED,
+        threaded: bool = CAMERA_THREADED, #A thread lets the program carry out another task alongside its main processing loop.
     ) -> None:
         """Open the device and optionally start its background capture worker.
 
@@ -134,21 +148,9 @@ class Camera:
 
     def read(self, timeout: float = CAMERA_READ_TIMEOUT_S) -> Frame:
         """Return a frame newer than the last one delivered by read().
-
-        Args:
-            timeout: Positive, finite maximum wait in seconds. In synchronous
-                mode, checks cannot interrupt a blocked native driver call.
-
-        Returns:
-            The newest available Frame; slow consumers skip older frames.
-
-        Raises:
-            ValueError: timeout is not positive and finite.
-            RuntimeError: The device closes, fails repeatedly or times out.
-
-        Safe to call from multiple threads; consumption is shared, not per caller.
+            Returns a frame newer than the last delivered one, waiting if necessary.
         """
-        if not math.isfinite(timeout) or timeout <= 0:
+        if not math.isfinite(timeout) or timeout <= 0: #Timeout
             raise ValueError("timeout must be a finite, positive number.")
         deadline = time.perf_counter() + timeout
         if not self._threaded:
@@ -156,10 +158,10 @@ class Camera:
 
         with self._condition:
             while True:
-                self._check_available()
-                frame = self._latest_frame
+                self._check_available() #Check if the frame is available
+                frame = self._latest_frame #Check the latest frame
                 if frame is not None and frame.index > self._last_read_index:
-                    self._last_read_index = frame.index
+                    self._last_read_index = frame.index 
                     return frame
                 remaining = deadline - time.perf_counter()
                 if remaining <= 0:
@@ -175,7 +177,7 @@ class Camera:
         It can return the same index repeatedly and does not consume read().
         """
         with self._condition:
-            return self._latest_frame
+            return self._latest_frame #Return the latest frame
 
     @property
     def fps(self) -> float:
@@ -240,70 +242,74 @@ class Camera:
             raise self._error
 
     def _capture_frame(self) -> Frame | None:
-        """Read, timestamp, resize and mirror one image for the sole I/O owner.
-
-        Returns:
-            A prepared Frame, or None for a transient read failure.
-
-        Raises:
-            RuntimeError: Five consecutive reads fail or the device returns an
-                invalid image. The failure limit comes from configuration.
         """
-        success, image = self._cap.read()
-        t_capture = time.perf_counter()  # Before resize/flip, for honest latency.
+        Reads an image, records its timestamp, validates it, 
+        resizes/mirrors it, and assigns a frame number.
+        """
+        success, image = self._cap.read() #Read the image
+        t_capture = time.perf_counter()  # Before resize/flip.
+        #If reading the image not success
         if not success:
             self._failed_reads += 1
             if self._failed_reads >= CAMERA_MAX_FAILED_READS:
                 raise RuntimeError("Repeated camera read failures – check the webcam connection.")
             return None
         self._failed_reads = 0
-        if (
+        if ( #Return invadlid BGR uint8 image
             not isinstance(image, np.ndarray)
-            or image.dtype != np.uint8
+            or image.dtype != np.uint8 
             or image.ndim != 3
             or image.shape[2] != 3
             or 0 in image.shape
         ):
             raise RuntimeError("Camera returned an invalid BGR uint8 image; check its driver.")
-        if image.shape[:2] != (self._height, self._width):
+        if image.shape[:2] != (self._height, self._width): #Resizeing the image
             image = cv2.resize(image, (self._width, self._height))
-        if self._mirror:
-            image = cv2.flip(image, 1)
+        if self._mirror: #mirroing the image
+            image = cv2.flip(image, 1) 
+        #Assign number to the frame
         frame = Frame(image=image, t_capture=t_capture, index=self._next_index)
         self._next_index += 1
         return frame
 
     def _publish_frame(self, frame: Frame) -> None:
-        """Replace the saved frame, update FPS history and wake waiting readers."""
+        
+        """Replace the saved frame, update FPS history,timestamp history and wake waiting readers."""
+        #Both threads access shared information, such as self._latest_frame. 
+        #A lock allows only one thread at a time to access the protected information.
         with self._condition:
             if self._closed:
                 return  # Discard a capture that completed during shutdown.
-            self._latest_frame = frame
-            self._capture_times.append(frame.t_capture)
+            self._latest_frame = frame #Capture the latest frame
+            self._capture_times.append(frame.t_capture) #capture the time
             self._trim_capture_times(frame.t_capture)
             self._condition.notify_all()
+
 
     def _trim_capture_times(self, now: float) -> None:
         """Keep the specified one-second history; caller holds _condition."""
         while self._capture_times and self._capture_times[0] < now - 1.0:
             self._capture_times.popleft()
 
+
     def _capture_loop(self) -> None:
+        """Repeatedly captures and publishes frames until stopped;
+          handles errors and cleanup."""
         """Own background device I/O, reporting failures to read() before exit."""
         try:
             while not self._stop_event.is_set():
-                frame = self._capture_frame()
+                frame = self._capture_frame() #Calling capture frame, repeat
                 if frame is not None:
                     self._publish_frame(frame)
         except Exception as exc:
             # Thread exceptions do not propagate to callers on their own.
             with self._condition:
                 self._error = RuntimeError(f"Camera capture failed: {exc}")
-                self._error.__cause__ = exc
+                self._error.__cause__ = exc #Escape the program
                 self._condition.notify_all()
         finally:
             with self._capture_lock:
-                self._release_capture()
+                self._release_capture() # Release capture after done
 
     def _release_capture(self) -> None:
         """Release once only; caller holds _capture_lock and owns device I/O."""
@@ -313,15 +319,6 @@ class Camera:
 
     def _read_sync(self, deadline: float) -> Frame:
         """Capture in the caller, serializing I/O without blocking latest().
-
-        Args:
-            deadline: Absolute perf_counter() time in seconds.
-
-        Returns:
-            A newly captured Frame.
-
-        Raises:
-            RuntimeError: Capture fails, closes or exceeds the deadline.
         """
         remaining = deadline - time.perf_counter()
         if remaining <= 0 or not self._capture_lock.acquire(timeout=remaining):

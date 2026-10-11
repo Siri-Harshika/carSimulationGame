@@ -23,24 +23,20 @@ from src.config import (
     WRIST_IDX,
 )
 
+"""
+1: Validate: check the coordinate shape, values and handedness
+2: Correct image proportions: adjust x and z using the image width to height ratio
+3: Centre on the wrist: subtract the wrist coordinates so the write becomes (0,0,0)
+4: Mirror left-hand coordinates: reverse their x values so both hands use a consistent orientation.
+5: divide coordinates by the wrist-to-middle-finger-base distance measured in x and y.
+6: Flatten: turn the (21,3) coordinate array into 63 numbers
+"""
+
 
 def preprocess(landmarks: HandLandmarks) -> np.ndarray:
-    """Make raw hand coordinates independent of position, scale and handedness.
-
-    Args:
-        landmarks: One hand with points of shape (21, 3) and handedness
-            "Left" or "Right". Coordinates must use the configured frame aspect.
-
-    Returns:
-        A new float32 array of shape (63,), ordered [x0, y0, z0, ..., x20, y20, z20].
-        The wrist is the origin and the x-y palm length is one. Input is unchanged.
-
-    Raises:
-        ValueError: Coordinates are invalid/non-finite, handedness is unknown, or
-            the wrist-to-middle-MCP palm length is below MIN_PALM_SIZE.
-
-    This function has no I/O, mutable global state or camera/library processing.
-    Training and live prediction must both call it to avoid mismatched features.
+    """
+    Validates and normalises 21 hand landmarks, then returns a float32 array containing 63 features. 
+    Leaves the original coordinates unchanged.
     """
     if landmarks.handedness not in ("Left", "Right"):
         raise ValueError('handedness must be "Left" or "Right".')
@@ -78,19 +74,8 @@ def preprocess(landmarks: HandLandmarks) -> np.ndarray:
 
 
 def row_to_landmarks(features_raw: Sequence[float], handedness: str) -> HandLandmarks:
-    """Rebuild raw HandLandmarks from a CSV row's f0..f62 fields.
-
-    Args:
-        features_raw: Exactly 63 raw numeric values in landmark x/y/z order.
-        handedness: Recorded "Left" or "Right" label.
-
-    Returns:
-        Independent (21, 3) coordinates for preprocess(). score is a 1.0
-        placeholder because CSVs do not store handedness confidence; preprocessing
-        never uses that field. This helper does not normalize the coordinates.
-
-    Raises:
-        ValueError: Wrong feature count, nonnumeric/non-finite values or unknown hand.
+    """
+    Takes 63 raw coordinate values already loaded from a CSV, plus a Left/Right label, and rebuilds a HandLandmarks object.
     """
     if handedness not in ("Left", "Right"):
         raise ValueError('handedness must be "Left" or "Right".')

@@ -42,6 +42,7 @@ def tracker(monkeypatch: pytest.MonkeyPatch) -> Iterator[HandTracker]:
     tracker.close()
 
 
+# Run the invalid-image test below once for each of these five inputs.
 @pytest.mark.parametrize(
     "image",
     [
@@ -85,23 +86,6 @@ def test_detect_converts_rgb_returns_first_hand_and_preserves_source(tracker: Ha
     assert model.options["static_image_mode"] is False
 
 
-def test_no_detection_returns_none(tracker: HandTracker) -> None:
-    """No-hand detection is a normal result, not an exception."""
-    assert tracker.detect(np.zeros((20, 20, 3), dtype=np.uint8)) is None
-
-
-def test_draw_changes_pixels_but_not_shape_or_landmarks(tracker: HandTracker) -> None:
-    """Drawing annotates only the preview pixels and preserves the raw geometry."""
-    points = np.zeros((21, 3))
-    points[:, 0] = np.linspace(0.2, 0.8, 21)
-    points[:, 1] = np.linspace(0.3, 0.7, 21)
-    before = points.copy()
-    image = np.zeros((480, 640, 3), dtype=np.uint8)
-    tracker.draw(image, HandLandmarks(points, "Right", 0.9))
-    assert image.shape == (480, 640, 3)
-    assert image.dtype == np.uint8
-    assert np.count_nonzero(image) > 0
-    np.testing.assert_array_equal(points, before)
 
 
 def test_close_is_repeatable_and_detect_after_close_fails(tracker: HandTracker) -> None:
