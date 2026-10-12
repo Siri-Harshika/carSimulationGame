@@ -7,69 +7,30 @@ Specification: docs/interfaces.md §4.5.
 STUB (Lead, Iteration 1): the Protocol is complete; GestureClassifier signatures
 are frozen and Siri replaces every `raise NotImplementedError`.
 """
-
+import joblib
+import numpy as np
 from pathlib import Path
 from typing import Protocol
 
-import numpy as np
-
-from src.config import CONFIDENCE_THRESHOLD, MODEL_PATH
-
-
 class Classifier(Protocol):
-    """Anything the live loop can use: real SVM or keyboard mock (LI.8)."""
-
-    def predict(self, features: np.ndarray) -> tuple[str, float]:
-        """Classify one preprocessed feature vector.
-
-        Args:
-            features: preprocess() output, shape (63,).
-
-        Returns:
-            (label, confidence) with label in LABELS and confidence in [0, 1].
-        """
+    """Protocol defining how the game interacts with the classifier."""
+    def predict(self, features: np.ndarray) -> str:
         ...
 
-
 class GestureClassifier:
-    """The trained SVM, loaded once. Called only from the GestureWorker thread."""
-
-    def __init__(self, model_path: Path = MODEL_PATH,
-                 threshold: float = CONFIDENCE_THRESHOLD) -> None:
-        """Load the model bundle.
-
-        Args:
-            model_path: The joblib bundle written by train.py.
-            threshold: Confidence below this returns "none". Use 0.0 for evaluation.
-
-        Raises:
-            FileNotFoundError: If the bundle is missing (suggests running src.model.train).
-            ValueError: If bundle["preprocess_version"] != config.PREPROCESS_VERSION.
-        """
-        raise NotImplementedError
-
-    def predict(self, features: np.ndarray) -> tuple[str, float]:
-        """Classify one feature vector (< 2 ms on a laptop CPU).
-
-        Args:
-            features: preprocess() output, float32/float64, shape (63,).
-
-        Returns:
-            (label, confidence): argmax of predict_proba and its probability;
-            ("none", confidence) if confidence < threshold.
-
-        Raises:
-            ValueError: If the shape is not (63,) or any value is non-finite.
-        """
-        raise NotImplementedError
-
-    def predict_proba(self, features: np.ndarray) -> dict[str, float]:
-        """[added] Return every class probability, for evaluation/debug.
-
-        Args:
-            features: preprocess() output, shape (63,).
-
-        Returns:
-            label → probability.
-        """
-        raise NotImplementedError
+    """Loads the trained SVM and makes real-time predictions."""
+    
+    def __init__(self, model_path: Path | str = "models/classifier.pkl"):
+        path = Path(model_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Model not found at {path}. Run train.py first.")
+        self.model = joblib.load(path)
+        
+    def predict(self, features: np.ndarray) -> str:
+        """Predict the gesture for a single frame of landmarks."""
+        # Ensure 2D array format required by scikit-learn
+        if features.ndim == 1:
+            features = features.reshape(1, -1)
+            
+        prediction = self.model.predict(features)
+        return prediction[0]
