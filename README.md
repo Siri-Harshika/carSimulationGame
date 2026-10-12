@@ -59,3 +59,17 @@ Always run from the repository root, so that `src` is importable.
 - Stub modules raise `NotImplementedError`. Replace the bodies, but keep the signatures.
 
 Full rules: [docs/workflow.md §12–13](docs/workflow.md#12-git-workflow).
+
+## Integration development (Evan)
+
+The integration layer is implemented. The real classifier and full game remain
+unfinished, so start with the existing mocks and temporary controller:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.app.main --classifier mock --camera mock --log-latency
+```
+
+Hold 1/2/3 for fist/V sign/palm, or H for no hand. Release between repeated
+commands. The status panel shows state, lane, predictions and FPS. There are
+currently no obstacles or collisions. See [Evan's technical notes](docs/notes/evan.md)
+for the manual test checklist, architecture, latency definitions and limitations.

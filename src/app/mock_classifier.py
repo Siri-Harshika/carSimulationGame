@@ -63,7 +63,14 @@ class KeyboardState:
         Args:
             pressed: Sequence indexed by pygame key code.
         """
-        snapshot = tuple(bool(p) for p in pressed)
+        # Pygame's ScancodeWrapper indexes by key code but iterates by SDL
+        # scancode. Converting it directly to a tuple loses that translation.
+        # Read the mock keys explicitly while still on the Pygame main thread.
+        mock_keys = (*[key for key, _ in _KEY_LABELS], pygame.K_h)
+        snapshot_values = [False] * (max(mock_keys) + 1)
+        for key in mock_keys:
+            snapshot_values[key] = _is_pressed(pressed, key)
+        snapshot = tuple(snapshot_values)
         with self._lock:
             self._pressed = snapshot
 
