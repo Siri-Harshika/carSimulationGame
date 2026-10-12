@@ -1,7 +1,14 @@
 """One-time test-set evaluation, confusion matrix, per-condition tables.
 
 Owner: Siri (Classifier).
+Provides: results/ files of docs/data-eval.md §8.5.
 Specification: docs/interfaces.md §4.5.
+
+Usage (from the repo root):
+    python -m src.model.evaluate [--splits data/splits.json] [--timing] [--nice]
+
+STUB (Lead, Iteration 1): signatures are frozen; Siri replaces every
+`raise NotImplementedError` with the real implementation.
 """
 import joblib
 import numpy as np

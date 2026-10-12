@@ -1,7 +1,11 @@
 """Classifier Protocol + GestureClassifier (load model, predict()).
 
 Owner: Siri (Classifier).
+Provides: Classifier, GestureClassifier — consumed by Evan (worker.py, main.py).
 Specification: docs/interfaces.md §4.5.
+
+STUB (Lead, Iteration 1): the Protocol is complete; GestureClassifier signatures
+are frozen and Siri replaces every `raise NotImplementedError`.
 """
 import joblib
 import numpy as np

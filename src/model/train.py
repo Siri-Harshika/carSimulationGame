@@ -1,7 +1,15 @@
-"""Build_pipeline(), tune (LOUO over train users), train_model(), save.
+"""build_pipeline(), tune (LOUO over train users), train_model(), save.
 
 Owner: Siri (Classifier).
+Provides: the model bundle models/gesture_svm.joblib — consumed by predict.py and evaluate.py.
+Consumes: load_split("train") from src.data.split. NEVER loads the test split.
 Specification: docs/interfaces.md §4.5.
+
+Usage (from the repo root):
+    python -m src.model.train [--grid] [--splits data/splits.json] [--out models/gesture_svm.joblib]
+
+STUB (Lead, Iteration 1): signatures are frozen; Siri replaces every
+`raise NotImplementedError` with the real implementation.
 """
 import joblib
 import numpy as np
