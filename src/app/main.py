@@ -1,6 +1,6 @@
 """Evan's live integration entry point. Pygame and game calls stay on this thread.
 
-Run with --classifier mock --camera mock until the real classifier/game arrive.
+Default mode uses the real webcam and Siri's SVM; mock flags enable testing.
 The small status panel is integration diagnostics; the controller owns gameplay.
 """
 import argparse
@@ -32,9 +32,9 @@ def build_components(args, keys):
         if not MODEL_PATH.is_file():
             raise FileNotFoundError(f"{MODEL_PATH} not found; Siri must train the model. "
                                     "Use --classifier mock to test integration.")
-        from src.model.predict import GestureClassifier
+        from src.app.model_adapter import LiveGestureClassifier
         try:
-            classifier = GestureClassifier()
+            classifier = LiveGestureClassifier(model_path=MODEL_PATH)
         except NotImplementedError as exc:
             raise RuntimeError("Real classifier is unfinished. Use --classifier mock.") from exc
     if args.camera == "mock":

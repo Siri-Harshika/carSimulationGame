@@ -8,16 +8,16 @@ vote stabilises predictions. A debouncer emits one command per held gesture,
 with a separate steering cooldown. Missing hands pause play after smoothing;
 a fist or V sign resumes and performs its movement. Camera/tracking work runs
 in the background, while Pygame and game commands run on the main thread.
-Simulated predictions allow these behaviours to be tested before the classifier
-and complete game are available.
+The real SVM is now connected through an integration adapter. Simulated
+predictions remain available for testing without a webcam or trained model.
 
 ## Current scope and dependencies
 
 Implemented: `src/app/smoothing.py`, `actions.py`, `worker.py`, `main.py`, and
-`latency.py`. Existing mocks and the temporary GameController are used unchanged.
-The real camera, tracker and preprocessing implementations can be selected now.
-The real SVM implementation/model and Uy's gameplay/rendering/state machine
-remain unfinished. Mock mode displays state, lane, predictions, FPS and last
+`latency.py`, plus `model_adapter.py`. The keyboard snapshot in the existing
+mocks was corrected; the temporary GameController is unchanged. Siri's classifier
+and `models/classifier.pkl` have been merged from latest main and connected.
+Uy's gameplay/rendering/state machine remain unfinished. Mock mode displays state, lane, predictions, FPS and last
 changed action; it does not demonstrate obstacles, collisions or scoring.
 Game-over palm restart is covered by mapping tests; actual collision-to-restart
 play must be checked once the complete controller arrives.
@@ -88,7 +88,7 @@ p95, mean and maximum for every metric. Mock measurements validate the logger;
 they must not be reported as real gesture-recognition performance. Sensor
 exposure/driver buffering before capture timestamps and screen refresh after
 controller calls are excluded. Final bright/dim measurements, tuning and
-presentation plots still require the real classifier and complete game.
+presentation plots still require physical webcam trials and the complete game.
 
 ## Run and manually test
 
@@ -127,14 +127,18 @@ A real hand must be visible for keys 1/2/3 to classify. Remove it to test automa
 pause; H only simulates no hand with `--camera mock`. This mode verifies webcam
 integration but does not recognise actual fist/V/palm poses; keys supply labels.
 
-After Siri and Uy deliver their components:
+To recognise real fist/V-sign/open-palm gestures now (no mock key presses):
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.app.main --log-latency
 ```
 
-Then verify actual gestures, countdown/grace behaviour, collision/game-over palm
-restart and gesture-only play in bright and dim light. Record at least 50 changed
+Show your hand in the webcam and watch Raw, Stable, State and Lane. Fist moves
+left, V sign moves right, palm pauses; steering resumes, removing the hand pauses.
+Hold for half a second and relax between repeated commands. Recognition below
+70% confidence becomes `none` and produces no action. Once Uy finishes the game,
+verify countdown/grace behaviour, collision/game-over palm restart and gesture-only
+play in bright and dim light. Record at least 50 changed
 actions per lighting condition before reporting real median/p95 response times.
 
 ## Automated verification
@@ -153,16 +157,39 @@ CSV metrics and the actual mock application loop. A bounded smoke run is:
 ```
 
 Existing tests in other components may be empty or skipped, so a passing suite
-does not prove the unfinished classifier or full game is complete.
+does not prove the full game or real-world recognition checks are complete.
 
 ## Verification on this checkout
 
-Full pytest suite: 180 passed, 1 skipped. The skipped dataset test requires recordings in
+Full pytest suite after real-model integration: 192 passed, 1 skipped. The skipped dataset test requires recordings in
 `data/sample/`, which is currently empty. Dependency consistency passed (`pip check`). A headless mock application
 run emitted one resume-and-left action for a held fist, wrote a latency CSV,
 and exited cleanly. The rendered status display was visually inspected.
-Actual webcam operation and real recognition were not exercised in this run.
+The real saved classifier was exercised against a training example and in the
+application loop with simulated camera frames. Physical webcam gesture trials
+were not exercised in this run.
 
 Keyboard regression fix: Pygame key-state iteration uses SDL scancodes;
 explicit key-code lookups preserve 1/2/3/H when copying the snapshot. Tests
 cover this distinction, which a plain list of pressed keys does not reproduce.
+
+## Update: merging and connecting Siri's classifier
+
+Saved Evan's work on `evan-integration`, then merged `origin/main` at `5d1fc6c`.
+The trained file is `models/classifier.pkl` (a fitted sklearn Pipeline).
+Updated `config.MODEL_PATH` to its actual filename. Siri's wrapper returns a
+label string; `LiveGestureClassifier` in `src/app/model_adapter.py` preserves
+that wrapper and obtains probabilities from its loaded pipeline. The adapter
+returns `(label, confidence)`, selects the highest-probability class and applies
+the existing 0.70 confidence threshold. It validates the 63-feature input,
+classes, probability values and threshold. This restores the live contract
+without changing Siri's training or offline evaluation.
+
+The model has no preprocessing-version metadata, so only feature count/classes
+can be validated; future models should include version metadata. Probability
+argmax/thresholding may differ from Siri's offline `model.predict()` results;
+her reported accuracy does not directly measure thresholded live behaviour.
+No training, threshold retuning or reserved-test evaluation was performed.
+New tests cover the real model loading, probabilities, rejection, invalid inputs,
+threshold boundary and the full application loop using SVM with a mock camera.
+The missing-model error test now temporarily points to an absent file.

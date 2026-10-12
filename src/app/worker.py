@@ -14,7 +14,6 @@ from src.app.mock_classifier import MockCamera, MockHandTracker
 from src.app.smoothing import Debouncer, GestureSmoother
 from src.capture.camera import Camera
 from src.capture.landmarks import HandTracker
-from src.model.predict import Classifier
 
 
 @dataclass(frozen=True)

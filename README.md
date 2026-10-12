@@ -44,7 +44,7 @@ Always run from the repository root, so that `src` is importable.
 | `python -m src.data.collect --user u03 --condition bright_near` | Recording tool | Shobita |
 | `python -m src.data.dataset --report` | Cleaning + quality report → `results/dataset_report.txt` | Shobita |
 | `python -m src.data.split --test u02 u05` | Write the user-based split `data/splits.json` | Shobita |
-| `python -m src.model.train` | Tune on train users (LOUO), train, save `models/gesture_svm.joblib` | Siri |
+| `python -m src.model.train` | Tune on train users (LOUO), train, save `models/classifier.pkl` | Siri |
 | `python -m src.model.evaluate` | One-time evaluation on the test users, writes `results/` | Siri |
 | `pytest` | All unit tests (headless, no webcam or model needed) | everyone |
 
@@ -62,8 +62,15 @@ Full rules: [docs/workflow.md §12–13](docs/workflow.md#12-git-workflow).
 
 ## Integration development (Evan)
 
-The integration layer is implemented. The real classifier and full game remain
-unfinished, so start with the existing mocks and temporary controller:
+The integration layer and real SVM are available. The full game remains
+unfinished, so the temporary controller currently shows lane/state changes.
+Run actual webcam gesture recognition with:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.app.main --log-latency
+```
+
+Or test using the existing mocks:
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.app.main --classifier mock --camera mock --log-latency
