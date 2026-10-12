@@ -7,8 +7,7 @@ Specification: docs/interfaces.md §4.6; metrics in docs/data-eval.md §8.
 time.perf_counter() is one process-wide clock, so timestamps from the camera,
 worker and main threads can be compared directly.
 
-STUB (Lead, Iteration 1): ActionTiming is complete (plain data); LatencyLogger
-signatures are frozen and Evan replaces every `raise NotImplementedError`.
+Implementation: Evan live integration.
 """
 
 from dataclasses import dataclass
@@ -30,29 +29,62 @@ class ActionTiming:
     t_action: float       # right after the GameController call returned, main thread
 
 
+import csv
+import math
+import numpy as np
+
+
 class LatencyLogger:
-    """Collects ActionTimings and optionally writes them to CSV. Main thread only."""
+    """Store changed actions only; flush each CSV row so crashes lose less data."""
 
-    def __init__(self, out_path: Path | None) -> None:
-        """Create a logger.
+    _METRICS = ("response_ms", "processing_ms", "landmarks_ms", "predict_ms", "dispatch_ms")
 
-        Args:
-            out_path: CSV to write; None keeps the timings in memory only.
-        """
-        raise NotImplementedError
+    def __init__(self, out_path: Path | None):
+        self._rows = []
+        self._file = None
+        self._closed = False
+        self._writer = None
+        if out_path is not None:
+            out_path = Path(out_path)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            self._file = out_path.open("w", newline="", encoding="utf-8")
+            self._writer = csv.DictWriter(self._file, fieldnames=[
+                "action", "token", "t_onset", "t_trigger", "t_landmarks", "t_predict", "t_action",
+                *self._METRICS])
+            self._writer.writeheader()
+            self._file.flush()
 
     def log_action(self, timing: ActionTiming) -> None:
-        """Record one action.
-
-        Args:
-            timing: The action's timestamps.
-        """
-        raise NotImplementedError
+        if self._closed:
+            raise RuntimeError("Latency logger is closed")
+        stamps = [timing.t_onset, timing.t_trigger, timing.t_landmarks, timing.t_predict, timing.t_action]
+        if not all(math.isfinite(t) for t in stamps) or stamps != sorted(stamps):
+            raise ValueError("Action timestamps must be finite and chronological")
+        row = dict(action=timing.action.value, token=timing.token,
+                   t_onset=timing.t_onset, t_trigger=timing.t_trigger,
+                   t_landmarks=timing.t_landmarks, t_predict=timing.t_predict, t_action=timing.t_action,
+                   response_ms=(timing.t_action-timing.t_onset)*1000,
+                   processing_ms=(timing.t_action-timing.t_trigger)*1000,
+                   landmarks_ms=(timing.t_landmarks-timing.t_trigger)*1000,
+                   predict_ms=(timing.t_predict-timing.t_landmarks)*1000,
+                   dispatch_ms=(timing.t_action-timing.t_predict)*1000)
+        self._rows.append(row)
+        if self._writer is not None:
+            self._writer.writerow(row)
+            self._file.flush()
 
     def summary(self) -> dict[str, float]:
-        """Return median/p95/mean/max of each latency metric, in ms."""
-        raise NotImplementedError
+        result = {"count": len(self._rows)}
+        if self._rows:
+            for metric in self._METRICS:
+                values = [row[metric] for row in self._rows]
+                for stat, value in (("median", np.median(values)), ("p95", np.percentile(values, 95)),
+                                    ("mean", np.mean(values)), ("max", np.max(values))):
+                    result[f"{metric}_{stat}"] = float(value)
+        return result
 
     def close(self) -> None:
-        """Flush and close the CSV (if any)."""
-        raise NotImplementedError
+        if not self._closed:
+            self._closed = True
+            if self._file is not None:
+                self._file.close()

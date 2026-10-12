@@ -4,8 +4,7 @@ Owner: Evan (Live integration).
 Provides: Action, gesture_to_action, apply_action — consumed by main.py.
 Specification: docs/interfaces.md §4.6 (the 5 × 4 mapping table).
 
-STUB (Lead, Iteration 1): Action is complete (plain data); function signatures
-are frozen and Evan replaces every `raise NotImplementedError`.
+Implementation: Evan live integration.
 """
 
 from enum import Enum
@@ -26,30 +25,43 @@ class Action(Enum):
     RESTART = "restart"
 
 
+# Column order matches the frozen state table in docs/interfaces.md.
+_STATES = (GameState.PLAYING, GameState.COUNTDOWN, GameState.PAUSED, GameState.GAME_OVER)
+_MAPPING = {
+    "fist": (Action.MOVE_LEFT, Action.MOVE_LEFT, Action.RESUME_AND_LEFT, Action.NOOP),
+    "v_sign": (Action.MOVE_RIGHT, Action.MOVE_RIGHT, Action.RESUME_AND_RIGHT, Action.NOOP),
+    "open_palm": (Action.PAUSE, Action.PAUSE, Action.NOOP, Action.RESTART),
+    "none": (Action.NOOP,) * 4,
+    "no_hand": (Action.PAUSE, Action.PAUSE, Action.NOOP, Action.NOOP),
+}
+
+
 def gesture_to_action(token: str, state: GameState) -> Action:
-    """THE single gesture→action mapping (I6). Pure: no side effects, no I/O.
-
-    Args:
-        token: A LABELS value or NO_HAND.
-        state: Current game state.
-
-    Returns:
-        The Action from the docs/interfaces.md §4.6 table.
-
-    Raises:
-        ValueError: For any other token.
-    """
-    raise NotImplementedError
+    """Look up the sole gesture-to-action mapping, without changing the game."""
+    if token not in _MAPPING or state not in _STATES:
+        raise ValueError(f"Invalid gesture/state: {token!r}, {state!r}")
+    return _MAPPING[token][_STATES.index(state)]
 
 
 def apply_action(controller: GameController, action: Action) -> bool:
-    """Execute an Action via GameController methods only. Main thread only.
-
-    Args:
-        controller: The game.
-        action: What to do. RESUME_AND_LEFT = resume() then move_left().
-
-    Returns:
-        True if the game changed.
-    """
-    raise NotImplementedError
+    """Use only controller methods; resume before movement during countdown."""
+    if not isinstance(action, Action):
+        raise ValueError(f"Invalid action: {action!r}")
+    if action == Action.NOOP:
+        return False
+    if action == Action.MOVE_LEFT:
+        return controller.move_left()
+    if action == Action.MOVE_RIGHT:
+        return controller.move_right()
+    before = controller.state
+    if action == Action.PAUSE:
+        controller.pause()
+    elif action == Action.RESTART:
+        controller.restart()
+        return True  # A reset changes the run even if already in countdown.
+    else:
+        controller.resume()
+        moved = (controller.move_left() if action == Action.RESUME_AND_LEFT
+                 else controller.move_right())
+        return moved or controller.state != before
+    return controller.state != before

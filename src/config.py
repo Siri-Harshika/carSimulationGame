@@ -7,7 +7,7 @@ DATA_DIR: Path = ROOT_DIR / "data" / "raw"
 SAMPLE_DIR: Path = ROOT_DIR / "data" / "sample"
 SPLITS_PATH: Path = ROOT_DIR / "data" / "splits.json"
 SAMPLE_SPLITS_PATH: Path = SAMPLE_DIR / "splits.json"
-MODEL_PATH: Path = ROOT_DIR / "models" / "gesture_svm.joblib"
+MODEL_PATH: Path = ROOT_DIR / "models" / "classifier.pkl"
 RESULTS_DIR: Path = ROOT_DIR / "results"
 SEED: int = 218
 
