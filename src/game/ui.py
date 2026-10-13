@@ -10,10 +10,11 @@ The HUD is how requirements GM.9 and LI.6 are met: the player can see the score,
 which gesture was recognised and how confident the classifier was, which makes a
 misclassification visible instead of mysterious during the demo.
 
-Fonts are created lazily and cached. ``pygame.font`` has to be initialised before a
-``Font`` can be built, and these functions must work when a test calls
-``GameController.render()`` on a bare surface without ever calling ``pygame.init()``
-— so they initialise the font module themselves rather than assuming a caller did.
+Fonts are built fresh on every call and deliberately **not** cached; see ``_font()``
+for why. ``pygame.font`` has to be initialised before a ``Font`` can be built, and
+these functions must work when a test calls ``GameController.render()`` on a bare
+surface without ever calling ``pygame.init()`` — so they initialise the font module
+themselves rather than assuming a caller did.
 
 Note on constants: as in ``render.py``, the palette and the type sizes are
 module-private because ``src/config.py`` is owned by the Lead and holds no
@@ -54,13 +55,9 @@ _LABEL_TEXT: dict[str, str] = {
     NO_HAND: "NO HAND",
 }
 
-# Cache keyed by pixel size, so a 60 FPS loop builds each font once instead of
-# re-rasterising it every frame.
-_FONT_CACHE: dict[int, pygame.font.Font] = {}
-
 
 def _font(size: int) -> pygame.font.Font:
-    """Return a cached default font at ``size`` pixels, initialising pygame.font.
+    """Return a new default font at ``size`` pixels, initialising pygame.font.
 
     Args:
         size: Font height in pixels.
@@ -70,12 +67,23 @@ def _font(size: int) -> pygame.font.Font:
         bundled .ttf would be one more file to ship, and the overlay text in
         docs/interfaces.md §4.4 is plain ASCII precisely so no special glyph
         coverage is needed.
+
+    Do **not** cache the returned object in a module-level dict. A ``Font`` is a thin
+    wrapper around a native ``TTF_Font*``; ``pygame.quit()`` calls ``TTF_Quit()`` and
+    frees that pointer while the Python object stays alive. A cache therefore survives
+    into the next ``pygame.init()`` and hands back a dangling pointer, which segfaults
+    (``access violation``) rather than raising — and ``pygame.font.get_init()`` cannot
+    detect it, because after a quit/init cycle it is ``True`` again. This is not
+    hypothetical: ``src/app/main.py`` quits pygame on exit, which
+    ``tests/test_main.py`` asserts, so any test that runs ``main()`` twice reaches
+    exactly that state.
+
+    Rebuilding costs ~0.35 ms and ``PLAYING`` needs one font per frame — about 2% of a
+    60 FPS budget — so the cache bought little and cost a crash.
     """
     if not pygame.font.get_init():
         pygame.font.init()
-    if size not in _FONT_CACHE:
-        _FONT_CACHE[size] = pygame.font.Font(None, size)
-    return _FONT_CACHE[size]
+    return pygame.font.Font(None, size)
 
 
 def draw_hud(surface: pygame.Surface, score: int, label: str, confidence: float,
@@ -178,8 +186,3 @@ def _draw_dim(surface: pygame.Surface) -> None:
 def _draw_centered(surface: pygame.Surface, text: str, size: int,
                    colour: tuple[int, int, int], offset: int = 0) -> None:
     """Draw ``text`` centred in the window, ``offset`` pixels below the middle."""
-    rendered = _font(size).render(text, True, colour)
-    surface.blit(
-        rendered,
-        rendered.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + offset)),
-    )
