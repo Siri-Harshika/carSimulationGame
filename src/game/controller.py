@@ -17,6 +17,7 @@ Not thread-safe. Pygame and this controller are used only on the main thread
 (docs/DESIGN.md §2.1 rule 7).
 """
 import random
+from collections import deque
 
 import pygame
 
@@ -29,6 +30,13 @@ from src.game.ui import draw_hud, draw_overlay
 # Everything set_gesture_info() will accept: the four classifier labels plus the
 # pipeline-only "no hand" token, which is not a label the model can ever output.
 _VALID_GESTURE_TOKENS: frozenset[str] = frozenset((*LABELS, NO_HAND))
+
+# How many entries ``calls`` keeps. The log exists for assertions and debugging, not
+# for gameplay, so it is capped: a long demo session fires an action roughly once a
+# second and would otherwise grow the list for as long as the program runs. The
+# longest sequence any test checks is five entries, so the cap is never reached
+# during a test.
+_CALL_LOG_MAXLEN: int = 256
 
 
 class GameController:
@@ -55,6 +63,8 @@ class GameController:
         self._label: str = NO_HAND
         self._confidence: float = 0.0
         self._hand_present: bool = False
+        # Append-only log of the action methods integration called; see ``calls``.
+        self._calls: deque[str] = deque(maxlen=_CALL_LOG_MAXLEN)
 
     # ------------------------------------------------------------------
     # Fixed interface (I5)
@@ -74,6 +84,7 @@ class GameController:
             Evan's latency logger uses this to time only actions that had a visible
             effect (docs/data-eval.md §8.3). Never raises.
         """
+        self._calls.append("move_left")
         if self._states.state not in (GameState.PLAYING, GameState.COUNTDOWN):
             return False
         return self._gameplay.move_left()
@@ -84,16 +95,19 @@ class GameController:
         Returns:
             True only if the car actually changed lane. See :meth:`move_left`.
         """
+        self._calls.append("move_right")
         if self._states.state not in (GameState.PLAYING, GameState.COUNTDOWN):
             return False
         return self._gameplay.move_right()
 
     def pause(self) -> None:
         """Pause the round. A no-op unless the state is ``PLAYING`` or ``COUNTDOWN``."""
+        self._calls.append("pause")
         self._states.pause()
 
     def resume(self) -> None:
         """Resume a paused round, starting the countdown. A no-op in other states."""
+        self._calls.append("resume")
         self._states.resume()
 
     def is_paused(self) -> bool:
@@ -119,12 +133,59 @@ class GameController:
         """The score as whole points. Fractional points are an internal detail."""
         return int(self._gameplay.score)
 
+    @property
+    def lane(self) -> int:
+        """The lane the car is in: 0 = left … ``NUM_LANES - 1`` = right.
+
+        Read-only and derived, so it cannot drift from ``Gameplay``'s own state. It
+        exists because GM.10 forbids integration code from reaching into
+        ``Gameplay``, yet two consumers legitimately need the lane: Evan's debug
+        overlay in ``src/app/main.py`` prints it, and ``tests/test_worker.py``
+        asserts on it to check that a gesture event actually steered the car.
+
+        **Interface note.** docs/interfaces.md §4.4 does not list this property; the
+        interface stubs and those tests do. §4.4 needs the matching edit.
+        """
+        return self._gameplay.car.lane
+
+    @property
+    def calls(self) -> list[str]:
+        """Names of the action methods called on this controller, oldest first.
+
+        One entry per call to ``move_left``, ``move_right``, ``pause``, ``resume`` or
+        ``restart``, recorded on entry — so a call that had no effect, such as
+        ``move_left()`` in the leftmost lane or ``pause()`` while already paused, is
+        still logged. The log answers "what did the integration layer ask for?", which
+        is a different question from "what changed?"; the return value of each method
+        already answers the second. ``update``, ``render`` and ``set_gesture_info`` are
+        deliberately not logged: they run every frame and would bury the actions.
+
+        Returns:
+            A fresh list, so a caller cannot mutate the controller's own log, and
+            comparing it to a list literal works. Capped at ``_CALL_LOG_MAXLEN``
+            entries; ``restart()`` adds to the log rather than clearing it, because the
+            log belongs to the controller object, not to one round.
+
+        This exists for ``tests/test_actions.py`` and ``tests/test_worker.py``, which
+        assert on the exact call sequence an action produces — ``RESUME_AND_LEFT``, for
+        instance, must call ``resume()`` *before* ``move_left()`` or the move is
+        swallowed in ``PAUSED``, and no return value can prove that ordering. It is a
+        test seam in production code, which is a real cost; the cleaner alternative is
+        for those tests to wrap the controller in ``MagicMock(spec=GameController)``.
+        If the team prefers that, this property can be deleted unchanged.
+
+        **Interface note.** docs/interfaces.md §4.4 does not list this property; the
+        interface stubs and those tests do. §4.4 needs the matching edit.
+        """
+        return list(self._calls)
+
     def restart(self) -> None:
         """Start a fresh round: reset the simulation and go to ``COUNTDOWN`` (GM.8).
 
         Works from any state, so the player can restart from the game-over screen
         with an open palm, and the keyboard ``R`` works at any time.
         """
+        self._calls.append("restart")
         self._gameplay.reset()
         self._states.restart()
 
